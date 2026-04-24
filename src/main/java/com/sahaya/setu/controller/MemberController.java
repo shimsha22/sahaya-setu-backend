@@ -1,6 +1,8 @@
 package com.sahaya.setu.controller;
 
 import com.sahaya.setu.model.Member;
+import com.sahaya.setu.model.ShgGroup;
+import com.sahaya.setu.model.Transaction;
 import com.sahaya.setu.repository.LoanRepository;
 import com.sahaya.setu.repository.MemberRepository;
 import com.sahaya.setu.repository.TransactionRepository;
@@ -16,7 +18,7 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/members")
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = "http://localhost:3000") // Secure CORS for React
 public class MemberController {
 
     @Autowired
@@ -54,11 +56,12 @@ public class MemberController {
         newMember.setPassword(password);
         newMember.setRole(Member.Role.MEMBER);
 
-        newMember.setCredibilityScore(100);
+        newMember.setCredibilityScore(300); // Updated to match our new baseline
         newMember.setTotalSavedShare(0.0);
+        newMember.setTotalLoanOutstanding(0.0); // Initialize new field
 
         if (groupIdStr != null) {
-            com.sahaya.setu.model.ShgGroup group = shgGroupRepo.findById(Long.parseLong(groupIdStr))
+            ShgGroup group = shgGroupRepo.findById(Long.parseLong(groupIdStr))
                     .orElseThrow(() -> new RuntimeException("Group not found"));
             newMember.setShgGroup(group);
         }
@@ -72,42 +75,37 @@ public class MemberController {
     }
 
     // ==========================================
-    // 2. GET SAFE MEMBER PROFILE (INFINITE LOOP PROOF)
+    // 2. GET SAFE MEMBER PROFILE (OPTIMIZED WITH FINTECH DOMAIN)
     // ==========================================
     @GetMapping("/{mobileNumber}")
     public ResponseEntity<?> getMemberProfile(@PathVariable String mobileNumber) {
 
         // Find the member
-        com.sahaya.setu.model.Member member = memberRepo.findByMobileNumber(mobileNumber)
+        Member member = memberRepo.findByMobileNumber(mobileNumber)
                 .orElseThrow(() -> new RuntimeException("Member not found"));
 
         // Fetch only their transactions safely
-        java.util.List<com.sahaya.setu.model.Transaction> history = transactionRepo.findAll().stream()
+        List<Transaction> history = transactionRepo.findAll().stream()
                 .filter(t -> t.getMember() != null && t.getMember().getId().equals(member.getId()))
-                .collect(java.util.stream.Collectors.toList());
+                .collect(Collectors.toList());
 
-        // Calculate their actual total saved money dynamically!
-        double personalTotal = history.stream()
-                .filter(t -> t.getTransactionType() != null && t.getTransactionType().contains("DEPOSIT"))
-                .mapToDouble(com.sahaya.setu.model.Transaction::getAmount)
-                .sum();
-
-        // Build a SAFE, clean package to send to React (No Infinite Loops!)
+        // Build a SAFE, clean package to send to React.
+        // Notice how we use the direct Database values now instead of calculating them manually!
         Map<String, Object> safeProfile = new HashMap<>();
         safeProfile.put("fullName", member.getFullName());
         safeProfile.put("mobileNumber", member.getMobileNumber());
-        safeProfile.put("credibilityScore", member.getCredibilityScore() != null ? member.getCredibilityScore() : 100);
-        safeProfile.put("totalSaved", personalTotal);
-        safeProfile.put("loanOutstanding", 0);
+        safeProfile.put("credibilityScore", member.getCredibilityScore() != null ? member.getCredibilityScore() : 300);
+        safeProfile.put("totalSaved", member.getTotalSavedShare());
+        safeProfile.put("loanOutstanding", member.getTotalLoanOutstanding());
 
-        // Clean up the transaction history so React can read it easily
-        java.util.List<Map<String, Object>> safeHistory = history.stream().map(t -> {
+        // Clean up the transaction history using the NEW getter methods!
+        List<Map<String, Object>> safeHistory = history.stream().map(t -> {
             Map<String, Object> txData = new HashMap<>();
-            txData.put("amount", t.getAmount());
-            txData.put("type", t.getTransactionType());
-            txData.put("date", t.getTransactionDate() != null ? t.getTransactionDate().toString().substring(0, 10) : "Today");
+            txData.put("amount", t.getTotalAmount()); // Fixed
+            txData.put("type", t.getType().name());   // Fixed (Enum to String)
+            txData.put("date", t.getTimestamp() != null ? t.getTimestamp().toLocalDate().toString() : "Today"); // Fixed
             return txData;
-        }).collect(java.util.stream.Collectors.toList());
+        }).collect(Collectors.toList());
 
         safeProfile.put("history", safeHistory);
 

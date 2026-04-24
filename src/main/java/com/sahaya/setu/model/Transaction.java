@@ -1,41 +1,48 @@
 package com.sahaya.setu.model;
 
-
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.NoArgsConstructor;
+import lombok.Data;
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
+@Data
 @Entity
-@Table(name = "transaction")
-@Getter
-@Setter
-@NoArgsConstructor
+@Table(name = "transactions")
 public class Transaction {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
-    @JoinColumn(name = "shg_id")
-    private ShgGroup shgGroup;
+    @JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "member_id", nullable = false)
+    private Member member;
 
-    @ManyToOne
-    @JoinColumn(name = "member_id")
-    private Member member; // Can be null if it's a group-wide expense
+    @JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "group_id", nullable = false)
+    private ShgGroup group;
 
-    private String transactionType; // "SAVINGS_DEPOSIT", "LOAN_REPAYMENT", "GROUP_EXPENSE"
-    private Double amount;
+    // Optional: If this transaction was paying off a loan, link it here!
+    @JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "loan_id")
+    private Loan relatedLoan;
 
-    private String description;
+    @Enumerated(EnumType.STRING)
+    private TransactionType type;
 
+    private Double totalAmount;       // The total cash handed over (e.g., 1000)
+    private Double principalPortion;  // How much paid off debt (e.g., 900)
+    private Double interestPortion;   // How much was group profit (e.g., 100)
 
-    private Double principalPortion = 0.0;
-    private Double interestPortion = 0.0;
-    private Double penaltyAmount = 0.0;
-    private LocalDateTime transactionDate = LocalDateTime.now();
+    private LocalDateTime timestamp;
 
-    private String voiceCommandRaw;
-    private Boolean isVerified = false;
+    public enum TransactionType {
+        SAVINGS_DEPOSIT, // Normal monthly saving
+        LOAN_DISBURSEMENT, // Group giving money OUT
+        LOAN_REPAYMENT,  // Member giving money IN (paying debt)
+        WITHDRAWAL // Member taking savings out
+    }
 }

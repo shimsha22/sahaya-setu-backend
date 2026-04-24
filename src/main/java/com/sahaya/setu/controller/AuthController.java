@@ -1,7 +1,9 @@
 package com.sahaya.setu.controller;
 
 import com.sahaya.setu.model.Member;
+import com.sahaya.setu.model.ShgGroup;
 import com.sahaya.setu.repository.MemberRepository;
+import com.sahaya.setu.repository.ShgGroupRepository;
 import com.sahaya.setu.security.JwtUtil;
 import com.sahaya.setu.service.AuthService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,8 +16,9 @@ import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = "http://localhost:3000") // Secure CORS for React
 public class AuthController {
+
     @Autowired
     private AuthService authService;
 
@@ -26,14 +29,14 @@ public class AuthController {
     private JwtUtil jwtUtil;
 
     @Autowired
-    private com.sahaya.setu.repository.ShgGroupRepository shgGroupRepo;
+    private ShgGroupRepository shgGroupRepo;
 
     // --- 1. REGISTRATION FLOW (OTP Required) ---
 
     @PostMapping("/register/request-otp")
     public ResponseEntity<Map<String, String>> requestRegistrationOtp(@RequestBody Map<String, String> payload) {
         String mobile = payload.get("mobileNumber");
-        String message = authService.generateAndSendOtp(mobile); // Still prints to IntelliJ console
+        String message = authService.generateAndSendOtp(mobile);
 
         Map<String, String> response = new HashMap<>();
         response.put("message", message);
@@ -52,17 +55,17 @@ public class AuthController {
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Invalid OTP"));
         }
 
-        // 2. NEW: Create their SHG Group first!
-
-        com.sahaya.setu.model.ShgGroup newGroup = new com.sahaya.setu.model.ShgGroup();
+        // 2. Create their SHG Group first (UPGRADED FIELDS)
+        ShgGroup newGroup = new ShgGroup();
         newGroup.setShgName(fullName + "'s SHG");
-
-
         newGroup.setShgCode("SHG-" + java.util.UUID.randomUUID().toString().substring(0, 6).toUpperCase());
 
-        newGroup.setTotalCorpus(0.0);
+        // --- THE FIX: Using the new strict financial fields ---
+        newGroup.setAvailableBalance(0.0);
+        newGroup.setTotalGroupWealth(0.0);
+
         newGroup.setBaseMonthlySaving(500.0);
-        newGroup = shgGroupRepo.save(newGroup); // Save it to the database!
+        newGroup = shgGroupRepo.save(newGroup);
 
         // 3. Save the new member and link them to the group
         Member newMember = new Member();
@@ -70,7 +73,7 @@ public class AuthController {
         newMember.setPassword(password);
         newMember.setFullName(fullName);
         newMember.setRole(Member.Role.PRESIDENT);
-        newMember.setShgGroup(newGroup); // THIS IS THE MAGIC LINK!
+        newMember.setShgGroup(newGroup);
         memberRepo.save(newMember);
 
         return ResponseEntity.ok(Map.of("success", true, "message", "Registration complete! You can now log in."));
@@ -83,23 +86,17 @@ public class AuthController {
         String mobile = payload.get("mobileNumber");
         String password = payload.get("password");
 
-        // 1. Find the member in the database
         Optional<Member> memberOpt = memberRepo.findByMobileNumber(mobile);
 
-        // 2. Check if they exist and the password matches
         if (memberOpt.isPresent() && memberOpt.get().getPassword().equals(password)) {
             Member member = memberOpt.get();
-
-            // 3. Generate the ID Card (JWT)
             String token = jwtUtil.generateToken(mobile);
 
-            // 4. Send back the token AND their role so React knows what dashboard to show
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("token", token);
             response.put("role", member.getRole().toString());
             response.put("fullName", member.getFullName());
-            response.put("groupId", member.getShgGroup() != null ? member.getShgGroup().getId() : null);
 
             if (member.getShgGroup() != null) {
                 response.put("groupId", member.getShgGroup().getId());

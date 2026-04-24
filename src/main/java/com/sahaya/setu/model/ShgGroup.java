@@ -1,6 +1,5 @@
 package com.sahaya.setu.model;
 
-
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -13,6 +12,7 @@ import java.time.LocalDate;
 @Setter
 @NoArgsConstructor
 public class ShgGroup {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -21,7 +21,23 @@ public class ShgGroup {
     private String shgCode;
 
     private String shgName;
+
     private LocalDate formationDate = LocalDate.now();
+
     private Double baseMonthlySaving;
-    private Double totalCorpus = 0.0;
+
+
+
+    // 1. The liquid cash in the box right now.
+    // (Goes UP on deposits/interest paid. Goes DOWN on loan disbursements).
+    private Double availableBalance = 0.0;
+
+    // 2. The total value of the group (availableBalance + all active loan principals).
+    // (This is the 'Corpus' the bank looks at for NRLM Credit Linkage).
+    private Double totalGroupWealth = 0.0;
+
+    // 3. (Optional but recommended) For the 2-month NRLM milestone "Savings A/C opening"
+    private String bankAccountNumber;
+
+    private boolean isBankAccountLinked = false;
 }
